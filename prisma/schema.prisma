@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  CUSTOMER
+  ADMIN
+  VENDOR
+}
+
+enum ProductCategory {
+  TROPHY
+  MEDAL
+  PLAQUE
+  JERSEY
+  HOODIE
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING
+  PAYMENT_PENDING
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(CUSTOMER)
+  address   String?
+  lat       Float?
+  lng       Float?
+  phone     String?
+  orders    Order[]
+  vendor    Vendor?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Product {
+  id                 String          @id @default(cuid())
+  name               String
+  category           ProductCategory
+  description        String
+  basePrice          Float
+  imageUrl           String?
+  customizableFields Json
+  isActive           Boolean         @default(true)
+  inventory          Inventory[]
+  orderItems         OrderItem[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([category])
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id])
+  assignedVendorId  String?
+  vendor            Vendor?     @relation(fields: [assignedVendorId], references: [id])
+  status            OrderStatus @default(PENDING)
+  totalPrice        Float
+  customerLat       Float?
+  customerLng       Float?
+  customerAddress   String?
+  estimatedDelivery DateTime?
+  stripeSessionId   String?
+  isExpressDelivery Boolean     @default(false)
+  routingNotes      String?
+  notes             String?
+  items             OrderItem[]
+  designs           Design[]
+  notifications     Notification[]
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([assignedVendorId])
+  @@index([status])
+}
+
+model OrderItem {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id])
+  quantity       Int
+  unitPrice      Float
+  customizations Json?
+  createdAt      DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model Vendor {
+  id            String      @id @default(cuid())
+  userId        String      @unique
+  user          User        @relation(fields: [userId], references: [id])
+  name          String
+  email         String
+  phone         String?
+  address       String
+  lat           Float
+  lng           Float
+  serviceRadius Float       // kilometres
+  isHQ          Boolean     @default(false)
+  isActive      Boolean     @default(true)
+  capacity      Int         @default(100) // max orders per day
+  orders        Order[]
+  inventory     Inventory[]
+  serviceAreas  String[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([isActive])
+}
+
+model Inventory {
+  id        String   @id @default(cuid())
+  vendorId  String
+  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  stock     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([vendorId, productId])
+  @@index([vendorId])
+}
+
+model Design {
+  id         String   @id @default(cuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  text       String?
+  font       String?
+  color      String?
+  fontSize   Int?
+  imageUrl   String?
+  layoutData Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([orderId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  userId    String?
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([orderId])
+}
